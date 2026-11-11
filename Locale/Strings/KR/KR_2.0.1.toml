@@ -1,0 +1,15 @@
+[top_bar_efmi_button_tooltip]
+src = "Arknights: Endfield Model Importer"
+loc = "명일방주: 엔드필드 모델 임포터"
+
+[locale_list_conjunction_or]
+src = "or"
+loc = "또는"
+
+[locale_list_conjunction_and]
+src = "and"
+loc = "그리고"
+
+[locale_list_separator]
+src = ", "
+loc = ", "

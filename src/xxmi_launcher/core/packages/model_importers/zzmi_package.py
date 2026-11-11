@@ -1,0 +1,219 @@
+import re
+import logging
+import json
+
+from dataclasses import dataclass, field
+from typing import Any
+
+from pathlib import Path
+
+import core.path_manager as Paths
+import core.event_manager as Events
+import core.config_manager as Config
+
+from core.locale_manager import L
+from core.package_manager import PackageMetadata
+
+from core.config.enums import InjectMode, GameLaunch
+from core.packages.model_importers.model_importer import ModelImporterPackage, ModelImporterConfig, Version
+from core.packages.migoto_package import MigotoManagerConfig
+from core.utils.sleepy import Sleepy, JsonSerializer
+from core.platforms.game import Game
+from core.utils.process_manager import LaunchContext
+
+log = logging.getLogger(__name__)
+
+
+@dataclass
+class ZZMIConfig(ModelImporterConfig):
+    game: Game = Game.ZENLESS_ZONE_ZERO
+    game_exe_names: list[str] = field(default_factory=lambda: ['ZenlessZoneZero.exe', 'ZenlessZoneZeroBeta.exe'])
+    game_folder_names: list[str] = field(default_factory=lambda: ['ZenlessZoneZero Game'])
+    game_folder_children: list[str] = field(default_factory=lambda: ['ZenlessZoneZero_Data'])
+    game_process_exe: str = "ZenlessZoneZero.exe"
+    importer_folder: str = 'ZZMI/'
+    launch_options: str = ''
+    xxmi_dll_inject_mode: InjectMode = InjectMode.HOOK
+    d3dx_ini: dict[str, dict[str, dict[str, Any]]] = field(default_factory=lambda: {
+        'core': {
+            'Loader': {
+                'loader': 'XXMI Launcher.exe',
+            },
+        },
+        'enforce_rendering': {
+            'Rendering': {
+                'texture_hash': 0,
+                'track_texture_updates': 0,
+                'track_region_hashes': 0,
+                'allow_buffer_resize': 1,
+            },
+        },
+        'enable_hunting': {
+            'Hunting': {
+                'hunting': {'on': 2, 'off': 0},
+            },
+        },
+        'dump_shaders': {
+            'Hunting': {
+                'marking_actions': {'on': 'clipboard hlsl asm regex', 'off': 'clipboard'},
+            },
+        },
+    })
+
+
+@dataclass
+class ZZMIPackageConfig:
+    Importer: ZZMIConfig = field(
+        default_factory=lambda: ZZMIConfig()
+    )
+    Migoto: MigotoManagerConfig = field(
+        default_factory=lambda: MigotoManagerConfig()
+    )
+
+
+class ZZMIPackage(ModelImporterPackage):
+    def __init__(self):
+        super().__init__(PackageMetadata(
+            package_name='ZZMI',
+            auto_load=False,
+            github_repo_owner='leotorrez',
+            github_repo_name='ZZMI-Package',
+            asset_version_pattern=r'.*(\d\.\d\.\d).*',
+            asset_name_format='ZZMI-PACKAGE-v%s.zip',
+            signature_pattern=r'^## Signature[\r\n]+- ((?:[A-Za-z0-9+\/]{4})*(?:[A-Za-z0-9+\/]{4}|[A-Za-z0-9+\/]{3}=|[A-Za-z0-9+\/]{2}={2}))\r?$',
+            signature_public_key='MHYwEAYHKoZIzj0CAQYFK4EEACIDYgAEb11GjbKQS6SmRe8TcIc5VMu5Ob3moo5v2YeD+s53xEe4bVPGcToUNLu3Jgqo0OwWZ4RsNy1nR0HId6pR09HedyEMifxebsyPT3T5PH82QozEXHQlTDySklWUfGItoOdf',
+            exit_after_update=False,
+            installation_path='ZZMI/',
+            requirements=['XXMI'],
+        ))
+        self.autodetect_patterns = {
+            'common': re.compile(r'([a-zA-Z]:[^:\"\']*Zenless[^:\"\']*)'),
+            # "installPath":"D:\\Games\\ZenlessZoneZero Game"
+            # "persistentInstallPath":"D:\\Games\\ZenlessZoneZero Game"
+            'hoyoplay': re.compile(r'\"(?:installPath|persistentInstallPath)\":\"([a-zA-Z]:[^:^\"]*)\"'),
+            # WwiseUnity: Setting Plugin DLL path to: C:/Games/ZenlessZoneZero Game/ZenlessZoneZero_Data\Plugins\x86_64
+            # [Subsystems] Discovering subsystems at path C:/Games/ZenlessZoneZero Game/ZenlessZoneZero_Data/UnitySubsystems
+            'player_log': re.compile(r'([a-zA-Z]:[^:\"\']*)(?:Plugins|UnitySubsystems)'),
+            # [0704/170821.845:INFO:API.cpp(331)] zfb_init: Using --apm_config={"astrolabePath":"Astrolabe.dll","reportPath":"C:\\Games\\ZenlessZoneZero Game\\ZenlessZoneZero_Data\\SDKCaches\\webview","logLevel":2"}
+            'output_log': re.compile(r'([a-zA-Z]:[^:\"\']*)SDKCaches"'),
+        }
+        self.autodetect_files = {
+            '{HOYOPLAY}': ['common', 'hoyoplay'],
+            '{APPDATA}/LocalLow/miHoYo/ZenlessZoneZero/Player.log': ['common', 'player_log'],
+            '{APPDATA}/LocalLow/miHoYo/ZenlessZoneZero/Player-prev.log': ['common', 'player_log'],
+            '{APPDATA}/LocalLow/miHoYo/ZenlessZoneZero/output_log.txt': ['common', 'output_log'],
+        }
+
+    def get_installed_version(self):
+        try:
+            return str(Version(Config.Importers.ZZMI.Importer.importer_path / 'Core' / 'ZZMI' / 'main.ini'))
+        except Exception as e:
+            return ''
+
+    def override_launch_context(
+        self,
+        launch_context: LaunchContext,
+        game_path: Path | None,
+        game_exe_path: Path | None,
+    ) -> None:
+        if Config.Importers.WWMI.Importer.game_launch != GameLaunch.DIRECT:
+            return
+
+        # EGS ZZZ 3.2 crashes on login screen if work_dir is the same as ZenlessZoneZero.exe location.
+        try:
+            if self.is_epic_hoyoplay_installation(game_exe_path):
+                launch_context.work_dir = game_exe_path.parent.parent.parent
+        except Exception as e:
+            logging.exception(f"Failed to check `{game_exe_path}` for being EGS installation: {e}")
+
+    def configure_game_settings(self, game_path: Path | None, game_exe_path: Path | None):
+        # Auto-config below requires reliably detectable installation location.
+        if Config.Importers.WWMI.Importer.game_launch not in [GameLaunch.DIRECT, GameLaunch.STEAM, GameLaunch.EPIC_GAMES]:
+            return
+        if not game_exe_path:
+            return
+
+        # Prevent further configuration if ZZMI isn't going to be used
+        if not Config.Active.Importer.is_xxmi_dll_used():
+            return
+
+        # Configure GENERAL_DATA.bin
+        if Config.Importers.ZZMI.Importer.configure_game:
+            Events.Fire(Events.Application.StatusUpdate(status=L('status_configuring_settings', 'Configuring in-game settings...')))
+
+            try:
+                config_path = game_exe_path.parent / 'ZenlessZoneZero_Data' / 'Persistent' / 'LocalStorage' / 'GENERAL_DATA.bin'
+
+                settings_manager = SettingsManager(config_path)
+
+                # Load settings from GENERAL_DATA.bin or initialize new settings container
+                settings_manager.load_settings()
+
+                # Set "Image Quality" to "Custom"
+                settings_manager.set_system_setting('3', 3)
+                # Set "High-Precision Character Animation" to "Disabled"
+                settings_manager.set_system_setting('13162', 0)
+                # Set "Character Quality" to "High"
+                settings_manager.set_system_setting('99', 1)
+
+                # Write settings to GENERAL_DATA.bin
+                settings_manager.save_settings()
+            except Exception as e:
+                raise ValueError(L('error_zzmi_game_config_failed', """
+                    Failed to configure in-game settings for ZZMI!
+                    Please disable **Configure Game Settings** in launcher's **General Settings** and check in-game settings:
+                    * **Graphics › Character Quality** must be **High**.
+                    * **Graphics › High-Precision Character Animation** must be **Disabled**.
+                    
+                    {error_text}
+                """).format(error_text=e)) from e
+
+
+class SettingsManager:
+    def __init__(self, config_path: Path):
+        self.path = config_path
+        self.json = JsonSerializer()
+        self.sleepy = Sleepy()
+        self.magic = bytes([85, 110, 209, 150, 116, 209, 131, 206, 149, 110, 103, 105, 110, 208, 181, 46, 71, 208, 176, 109, 101, 206, 159, 98, 106, 101, 209, 129, 116])
+        self.settings = {}
+        self.modified = False
+
+    def load_settings(self):
+        if self.path.is_file():
+            Events.Fire(Events.PathManager.VerifyFileAccess(path=self.path, write=True))
+            content = self.sleepy.read_file(self.path, self.magic)
+            self.settings = json.loads(content)
+        else:
+            self.settings = {
+                '$Type': 'MoleMole.GeneralLocalDataItem',
+                'userLocalDataVersionId': '0.0.1',
+            }
+
+    def save_settings(self):
+        if not self.modified:
+            return
+        content = self.json.dumps(self.settings)
+        self.sleepy.write_file(self.path, self.magic, content)
+
+    def set_system_setting(self, setting_id: str, new_value: int):
+        system_settings = self.settings.get('SystemSettingDataMap', {})
+        setting = system_settings.get(setting_id, None)
+        if setting is None:
+            system_settings[setting_id] = {
+                '$Type': 'MoleMole.SystemSettingLocalData',
+                'Version': 0,
+                'Data': new_value
+            }
+            self.modified = True
+            log.debug(f'Added new setting {setting_id}: {new_value}')
+        else:
+            old_value = setting.get('Data', None)
+            if old_value is None:
+                raise ValueError(L('error_zzmi_unknown_settings_format', 'Unknown system settings entry format: {setting}!').format(setting=setting))
+            if old_value == new_value:
+                log.debug(f'Setting {setting_id} is already set to {old_value}')
+                return
+            setting['Data'] = new_value
+            self.modified = True
+            log.debug(f'Updated setting {setting_id}: {old_value} -> {new_value}')
+        self.settings['SystemSettingDataMap'] = system_settings

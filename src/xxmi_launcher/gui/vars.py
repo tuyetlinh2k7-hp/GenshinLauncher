@@ -1,0 +1,266 @@
+from customtkinter import BooleanVar, IntVar, DoubleVar, StringVar
+
+from enum import Enum
+from typing import Union
+from dataclasses import dataclass, field, fields
+
+import core.event_manager as Events
+import core.config_manager as Config
+
+from core import package_manager
+from core.packages import launcher_package
+from core.packages.model_importers import wwmi_package
+from core.packages.model_importers import zzmi_package
+from core.packages.model_importers import srmi_package
+from core.packages.model_importers import gimi_package
+
+
+class GuiVarMixin:
+    def __init__(self, *args, dataclass_field=None, **kwargs):
+        self._field = dataclass_field
+        super().__init__(*args, **kwargs)
+
+    def get_default(self):
+        return self._field.default
+
+
+class GuiBooleanVar(GuiVarMixin, BooleanVar):
+    pass
+
+
+class GuiIntVar(GuiVarMixin, IntVar):
+    pass
+
+
+class GuiDoubleVar(GuiVarMixin, DoubleVar):
+    pass
+
+
+class GuiStringVar(GuiVarMixin, StringVar):
+    pass
+
+
+class GuiEnumVar(GuiVarMixin, StringVar):
+    def __init__(
+        self,
+        master=None,
+        value: Enum | None =None,
+        name=None,
+        **kwargs,
+    ):
+        self._enum_class = type(value)
+        value = value.name
+
+        super().__init__(
+            master=master,
+            value=value,
+            name=name,
+            **kwargs,
+        )
+
+    def set(self, value: str | Enum):
+        if isinstance(value, Enum):
+            value = value.name
+        super().set(value)
+
+    def get(self) -> Enum:
+        value = super().get()
+        return self._enum_class[value]
+
+
+@dataclass
+class AppSettings(Config.AppConfig):
+    def __init__(self):
+        super().__init__()
+        self.cfg = None
+        self.gui = None
+        self.on_write_callbacks = {}
+        self.on_save_callbacks = {}
+
+    @property
+    def Active(self):
+        return Settings.Importers.__dict__.get(Config.Launcher.active_importer, None)
+
+    def initialize(self, cfg, gui):
+        self.gui = gui
+        self.cfg = cfg
+        self.on_write_callbacks = {}
+        self.on_save_callbacks = {}
+        self.initialize_vars()
+
+    def initialize_vars(self):
+        self.convert_vars(self)
+        global Launcher
+        Launcher = self.Launcher
+        global Packages
+        Packages = self.Packages
+        global Importers
+        Importers = self.Importers
+        global Active
+        Active = self.Active
+
+    def subscribe_on_save(self, var, callback, caller_id=None):
+        if var._name not in self.on_save_callbacks:
+            self.on_save_callbacks[var._name] = {}
+        callback_id = f'{caller_id.__class__}_{len(self.on_save_callbacks[var._name])}'
+        self.on_save_callbacks[var._name][callback_id] = (var, callback, caller_id, None)
+        return callback_id
+
+    def subscribe_on_write(self, var, callback, caller_id=None):
+        if var._name not in self.on_write_callbacks:
+            self.on_write_callbacks[var._name] = {}
+        callback_id = f'{caller_id.__class__}_{len(self.on_write_callbacks[var._name])}'
+        trace_id = var.trace('w', lambda var_id, index, mode: callback(var, var.get()))
+        self.on_write_callbacks[var._name][callback_id] = (var, callback, caller_id, trace_id)
+        return callback_id
+
+    def unsubscribe_on_write(self, callback_id=None, var=None, callback=None, caller_id=None):
+        """
+        Removes all callbacks for on_write subscribers, can be limited with params
+        :param var: (optional) limits callback removal to provided variable
+        :param callback: (optional) limits callback removal to provided callback
+        :param caller_id: (optional) limits callback removal to provided caller_id
+        """
+        self._unsubscribe(self.on_write_callbacks, callback_id, var, callback, caller_id)
+
+    def unsubscribe_on_save(self, callback_id=None, var=None, callback=None, caller_id=None):
+        """
+        Removes all callbacks for on_save subscribers, can be limited with params
+        :param var: (optional) limits callback removal to provided variable
+        :param callback: (optional) limits callback removal to provided callback
+        :param caller_id: (optional) limits callback removal to provided caller_id
+        """
+        self._unsubscribe(self.on_save_callbacks, callback_id, var, callback, caller_id)
+
+    def _unsubscribe(self, callbacks, callback_id=None, var=None, callback=None, caller_id=None):
+        if var is not None:
+            var_callbacks = callbacks.get(var._name, None)
+            if var_callbacks is not None:
+                self._unsubscribe_callbacks(var_callbacks, callback_id=callback_id, callback=callback, caller_id=caller_id)
+        else:
+            for var_callbacks in callbacks.values():
+                self._unsubscribe_callbacks(var_callbacks, callback_id=callback_id, callback=callback, caller_id=caller_id)
+
+    def _unsubscribe_callbacks(self, callbacks, callback_id=None, callback=None, caller_id=None):
+        for del_callback_id, (del_var, del_callback, del_caller_id, del_trace_id) in list(callbacks.items()):
+            if callback_id is not None and callback_id != del_callback_id:
+                continue
+            if callback is not None and callback != del_callback:
+                continue
+            if caller_id is not None and caller_id != del_caller_id:
+                continue
+            if del_trace_id is not None:
+                del_var.trace_vdelete('w', del_trace_id)
+            del callbacks[del_callback_id]
+
+    def load(self):
+        self.load_vars(self.cfg, self)
+
+    def save(self):
+        self.save_vars(self, self.cfg)
+        Config.Manager.sign_settings(save_config=False)
+        Events.Fire(Events.Application.ConfigUpdate())
+
+    def convert_vars(self, obj):
+        for dataclass_field in fields(obj):
+            value = getattr(obj, dataclass_field.name)
+
+            if hasattr(value, '__dataclass_fields__'):
+                self.convert_vars(value)
+
+            elif isinstance(value, str | int | float | bool | Enum):
+                var = self.convert_value(value, dataclass_field)
+                setattr(obj, dataclass_field.name, var)
+
+    def convert_value(self, value, dataclass_field):
+        if isinstance(value, bool):
+            return GuiBooleanVar(
+                master=self.gui,
+                value=value,
+                dataclass_field=dataclass_field,
+            )
+        elif isinstance(value, str):
+            return GuiStringVar(
+                master=self.gui,
+                value=value,
+                dataclass_field=dataclass_field,
+            )
+        elif isinstance(value, Enum):
+            return GuiEnumVar(
+                master=self.gui,
+                value=value,
+                dataclass_field=dataclass_field,
+            )
+        elif isinstance(value, int):
+            return GuiIntVar(
+                master=self.gui,
+                value=value,
+                dataclass_field=dataclass_field,
+            )
+        elif isinstance(value, float):
+            return GuiDoubleVar(
+                master=self.gui,
+                value=value,
+                dataclass_field=dataclass_field,
+            )
+        else:
+            raise ValueError(f'Unsupported settings var type {type(value)}!')
+
+    def load_vars(self, src, dst):
+        if hasattr(dst, '__dataclass_fields__'):
+            for dst_field in fields(dst):
+                var = getattr(dst, dst_field.name)
+                value = getattr(src, dst_field.name)
+                if hasattr(value, '__dataclass_fields__'):
+                    self.load_vars(value, var)
+                elif isinstance(value, dict | list | tuple) or (not dst_field.init and dst_field.default is None):
+                    pass
+                else:
+                    if isinstance(value, Enum):
+                        value = value.name
+                    var.set(value)
+                    self.fire_on_write(var, value)
+
+    def save_vars(self, src, dst):
+        for dst_field in fields(dst):
+            var = getattr(src, dst_field.name)
+            value = getattr(dst, dst_field.name)
+
+            if hasattr(value, '__dataclass_fields__'):
+                self.save_vars(var, value)
+                continue
+
+            if not dst_field.init and dst_field.default is None:
+                continue
+
+            if isinstance(value, str | int | float | bool | Enum):
+                var_value = var.get()
+
+                # Strip text input.
+                if isinstance(var_value, str):
+                    var_value = var_value.strip()
+
+                setattr(dst, dst_field.name, var_value)
+                self.fire_on_save(var, var_value, value)
+
+    def fire_on_save(self, var, new_value, old_value):
+        callbacks = self.on_save_callbacks.get(var._name, None)
+        if callbacks is not None:
+            for callback_id, (cb_var, callback, caller_id, trace_id) in callbacks.items():
+                callback(var, new_value, old_value)
+
+    def fire_on_write(self, var, new_value):
+        callbacks = self.on_write_callbacks.get(var._name, None)
+        if callbacks is not None:
+            for callback_id, (cb_var, callback, caller_id, trace_id) in callbacks.items():
+                callback(var, new_value)
+
+
+Settings: AppSettings = AppSettings()
+
+# Settings aliases, intended to shorten dot names
+Launcher: launcher_package.LauncherManagerConfig
+Packages: package_manager.PackageManagerConfig
+Importers: Config.ImportersConfig
+Active: Union[wwmi_package.WWMIPackageConfig, zzmi_package.ZZMIPackageConfig,
+              srmi_package.SRMIPackageConfig, gimi_package.GIMIPackageConfig]

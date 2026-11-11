@@ -1,0 +1,15 @@
+[launcher_settings_verify_ssl_checkbox_tooltip]
+src = """
+Controls SLL certificate validation for update downloads from GitHub.
+> Disable only if you trust your proxy or whatever else that breaks SSL.
+
+* **Enabled**: Enforce SLL validation to keep you secure.
+* **Disabled**: Allow insecure connection that exposes traffic to man-in-middle.
+"""
+loc = """
+Steruje weryfikacją certyfikatów SSL podczas pobierania aktualizacji z GitHuba.
+> Wyłącz tę opcję tylko wtedy, gdy ufasz swojemu serwerowi proxy lub innemu elementowi powodującemu problemy z SSL.
+
+* **Włączone**: Wymusza weryfikację SSL, aby zapewnić Ci bezpieczeństwo.
+* **Wyłączone**: Zezwala na niezabezpieczone połączenia, narażając przesyłane dane na przechwycenie przez atak typu man-in-the-middle.
+"""

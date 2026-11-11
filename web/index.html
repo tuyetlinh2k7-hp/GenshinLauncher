@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="vi" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Genshin Impact Launcher - HoYoPlay Edition</title>
+    <link rel="stylesheet" href="/style.css">
+</head>
+<body class="bg-slate-950 text-slate-100 select-none overflow-hidden h-screen flex flex-col font-sans">
+
+    <!-- Custom Frameless Titlebar -->
+    <header class="h-10 bg-slate-900/90 border-b border-slate-800/80 flex items-center justify-between px-3 pywebview-drag-region z-50 backdrop-blur-md">
+        <div class="flex items-center gap-2 pointer-events-none">
+            <div class="w-6 h-6 rounded-md bg-gradient-to-tr from-amber-500 to-amber-300 flex items-center justify-center shadow-lg shadow-amber-500/20">
+                <span class="text-xs font-black text-slate-950">G</span>
+            </div>
+            <span class="text-xs font-bold tracking-wider text-slate-200">GENSHIN LAUNCHER</span>
+            <span class="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 font-semibold border border-amber-500/30">HoYoPlay Edition</span>
+        </div>
+
+        <div class="flex items-center gap-1 -mr-1">
+            <button onclick="window.api.minimize()" class="w-8 h-8 rounded flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 transition" title="Thu nhỏ">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 12H4"/></svg>
+            </button>
+            <button onclick="window.api.maximize()" class="w-8 h-8 rounded flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 transition" title="Phóng to">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2" stroke-width="2"/></svg>
+            </button>
+            <button onclick="window.api.close()" class="w-8 h-8 rounded flex items-center justify-center text-slate-400 hover:text-white hover:bg-red-600 transition" title="Đóng">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <div class="flex-1 flex overflow-hidden relative">
+
+        <!-- Background Image with Ambient Glass Gradient -->
+        <div class="absolute inset-0 z-0 bg-cover bg-center pointer-events-none transition-all duration-700" style="background-image: url('/bg-image');">
+            <div class="absolute inset-0 bg-gradient-to-r from-slate-950 via-slate-950/85 to-slate-950/60 backdrop-blur-[2px]"></div>
+        </div>
+
+        <!-- Sidebar Navigation -->
+        <aside class="w-64 bg-slate-950/70 border-r border-slate-800/60 flex flex-col z-10 backdrop-blur-xl p-3 justify-between">
+            <div class="flex flex-col gap-1">
+                <div class="px-3 py-2 mb-2 flex items-center gap-3 bg-slate-900/50 rounded-xl border border-slate-800/40">
+                    <img src="/game-icon" class="w-8 h-8 rounded-lg shadow-md" onerror="this.style.display='none'">
+                    <div>
+                        <div class="text-xs font-bold text-slate-200">Genshin Impact</div>
+                        <div id="sidebar-version" class="text-[10px] text-amber-400 font-medium">Phiên bản: v7.1.0</div>
+                    </div>
+                </div>
+
+                <!-- Nav Items -->
+                <nav class="flex flex-col gap-1" id="nav-tabs">
+                    <button onclick="switchTab('home')" class="nav-btn active" data-tab="home">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+                        <span>Khởi Động</span>
+                    </button>
+                    <button onclick="switchTab('mods')" class="nav-btn" data-tab="mods">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+                        <span>Quản Lý Mod</span>
+                        <span id="nav-mods-count" class="badge-pill ml-auto">0</span>
+                    </button>
+                    <button onclick="switchTab('groups')" class="nav-btn" data-tab="groups">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"/></svg>
+                        <span>Gộp Mod</span>
+                    </button>
+                    <button onclick="switchTab('macro')" class="nav-btn" data-tab="macro">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                        <span>Macro Tiện Ích</span>
+                    </button>
+                    <button onclick="switchTab('fix')" class="nav-btn" data-tab="fix">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                        <span>Sửa Lỗi (ORFix)</span>
+                    </button>
+                    <button onclick="switchTab('wishes')" class="nav-btn" data-tab="wishes">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z"/></svg>
+                        <span>Lịch Sử Roll</span>
+                    </button>
+                    <button onclick="switchTab('plugins')" class="nav-btn" data-tab="plugins">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 14v6m-3-3h6M6 10h2a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v2a2 2 0 002 2zm10 0h2a2 2 0 002-2V6a2 2 0 00-2-2h-2a2 2 0 00-2 2v2a2 2 0 002 2zM6 20h2a2 2 0 002-2v-2a2 2 0 00-2-2H6a2 2 0 00-2 2v2a2 2 0 002 2z"/></svg>
+                        <span>Plugin Phụ Trợ</span>
+                    </button>
+                    <button onclick="switchTab('trash')" class="nav-btn" data-tab="trash">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                        <span>Thùng Rác</span>
+                    </button>
+                </nav>
+            </div>
+
+            <!-- Sidebar Bottom Info -->
+            <div class="flex flex-col gap-2 pt-3 border-t border-slate-800/40">
+                <div id="game-status-pill" class="flex items-center gap-2 px-3 py-2 rounded-xl bg-slate-900/60 border border-slate-800/40 text-xs">
+                    <span class="w-2.5 h-2.5 rounded-full bg-slate-500 animate-pulse"></span>
+                    <span class="text-slate-400 font-medium">Game: Chưa chạy</span>
+                </div>
+                <div id="admin-badge" class="flex items-center justify-between px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-300 font-semibold">
+                    <span>🛡️ Quyền Admin</span>
+                    <span class="text-[10px] text-emerald-400">Đã Kích Hoạt</span>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="flex-1 overflow-y-auto relative z-10 p-6 flex flex-col">
+
+            <!-- TAB 1: HOME -->
+            <section id="tab-home" class="tab-content flex-1 flex flex-col justify-between">
+                <div>
+                    <!-- Top Game Bar -->
+                    <div class="flex items-center justify-between mb-4">
+                        <div class="flex items-center gap-3">
+                            <h1 class="text-3xl font-black tracking-tight text-white drop-shadow-md">GENSHIN IMPACT</h1>
+                            <span id="badge-game-ver" class="px-2.5 py-1 rounded-md text-xs font-bold bg-sky-500/20 text-sky-400 border border-sky-500/30">v7.1.0</span>
+                            <span class="px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
+                                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span>
+                                GIMI Junction Active
+                            </span>
+                        </div>
+                        <button onclick="window.api.openHoYoPlay()" class="btn-secondary flex items-center gap-2">
+                            <svg class="w-4 h-4 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                            <span>Mở HoYoPlay (Cập nhật game)</span>
+                        </button>
+                    </div>
+
+                    <!-- Hero Banner Card -->
+                    <div class="relative rounded-2xl overflow-hidden border border-slate-700/50 shadow-2xl p-6 bg-gradient-to-r from-slate-900/90 to-slate-900/40 backdrop-blur-md mb-6">
+                        <div class="max-w-xl">
+                            <span class="text-xs uppercase font-extrabold tracking-widest text-amber-400 mb-1 block">3DMigoto Mod Virtualizer Engine</span>
+                            <h2 class="text-2xl font-black text-white mb-2 leading-snug">Hệ Thống Quản Lý Mod, Mở Khóa FPS & Tự Động Hóa Genshin</h2>
+                            <p class="text-xs text-slate-300 leading-relaxed mb-4">
+                                Khởi chạy mod mượt mà không trùng lặp bộ nhớ nhờ Windows Directory Junction. Tự động sửa lỗi cú pháp ini và tương thích 100% với phiên bản mới nhất.
+                            </p>
+                            <div class="flex items-center gap-3">
+                                <span class="badge-status">
+                                    <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                                    Sẵn sàng nạp Mod
+                                </span>
+                                <span id="home-active-mods-badge" class="badge-status">
+                                    📦 0 Mod đang kích hoạt
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quick Tools Dock -->
+                    <div class="grid grid-cols-5 gap-3 mb-6">
+                        <button onclick="window.api.toggleOverlay()" class="quick-card">
+                            <div class="text-lg">🎮</div>
+                            <div class="text-xs font-bold text-slate-200">Menu In-Game</div>
+                            <div class="text-[10px] text-slate-400">Phím nóng [F12]</div>
+                        </button>
+                        <button onclick="window.api.openFolder('mods')" class="quick-card">
+                            <div class="text-lg">📁</div>
+                            <div class="text-xs font-bold text-slate-200">Thư Mục Mod</div>
+                            <div class="text-[10px] text-slate-400">Data_Mods</div>
+                        </button>
+                        <button onclick="switchTab('fix')" class="quick-card">
+                            <div class="text-lg">🔧</div>
+                            <div class="text-xs font-bold text-slate-200">Sửa Lỗi ORFix</div>
+                            <div class="text-[10px] text-slate-400">Quét file ini</div>
+                        </button>
+                        <button onclick="switchTab('wishes')" class="quick-card">
+                            <div class="text-lg">🏆</div>
+                            <div class="text-xs font-bold text-slate-200">Lịch Sử Roll</div>
+                            <div class="text-[10px] text-slate-400">Tự trích xuất</div>
+                        </button>
+                        <button onclick="window.api.createShortcut()" class="quick-card">
+                            <div class="text-lg">⚡</div>
+                            <div class="text-xs font-bold text-slate-200">Lối Tắt Desktop</div>
+                            <div class="text-[10px] text-slate-400">1-Click Shortcut</div>
+                        </button>
+                    </div>
+
+                    <!-- System Log Terminal -->
+                    <div class="rounded-xl bg-slate-950/80 border border-slate-800/80 p-3 font-mono text-xs flex flex-col h-40">
+                        <div class="flex items-center justify-between pb-2 mb-2 border-b border-slate-800/60 text-slate-400">
+                            <span class="font-bold flex items-center gap-1.5 text-[11px]">
+                                <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                NHẬT KÝ KHỞI ĐỘNG & HỆ THỐNG
+                            </span>
+                            <button onclick="clearLogs()" class="hover:text-white text-[10px] px-2 py-0.5 rounded bg-slate-800 transition">Xóa Log</button>
+                        </div>
+                        <div id="terminal-logs" class="flex-1 overflow-y-auto space-y-1 text-slate-300 pr-1">
+                            <div class="text-slate-400">[00:00:00] Khởi động giao diện Web HoYoPlay thành công.</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bottom HoYoPlay Action Dock -->
+                <div class="mt-6 pt-4 border-t border-slate-800/60 flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <button onclick="launchGame(true, true)" class="btn-action-teal flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                            <span>Mở Khóa 120 FPS</span>
+                        </button>
+                        <button onclick="launchGame(false, false)" class="btn-action-slate flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/></svg>
+                            <span>Chơi Bản Gốc</span>
+                        </button>
+                    </div>
+
+                    <!-- BIG SIGNATURE HOYOPLAY BUTTON -->
+                    <button onclick="launchGame(true, false)" class="btn-hoyoplay-launch group">
+                        <span class="relative z-10 flex items-center gap-3">
+                            <svg class="w-6 h-6 transition-transform group-hover:scale-125" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                            <span class="tracking-wide">BẮT ĐẦU CHƠI (GIMI MOD)</span>
+                        </span>
+                        <div class="absolute inset-0 bg-gradient-to-r from-amber-400 via-amber-300 to-amber-500 opacity-0 group-hover:opacity-100 transition duration-300"></div>
+                    </button>
+                </div>
+            </section>
+
+            <!-- TAB 2: MOD MANAGER (MATCHES SCREENSHOT 1) -->
+            <section id="tab-mods" class="tab-content hidden flex-1 flex flex-col">
+                <!-- Toolbar -->
+                <div class="flex items-center justify-between gap-3 mb-4 bg-slate-900/60 p-3 rounded-xl border border-slate-800/60 backdrop-blur-md">
+                    <div class="flex items-center gap-3 flex-1 max-w-md">
+                        <div class="relative w-full">
+                            <input id="mod-search-input" oninput="onSearchMod(this.value)" type="text" placeholder="Tìm kiếm mod..." class="input-search">
+                            <button onclick="clearModSearch()" class="absolute right-2.5 top-2 text-slate-400 hover:text-white">✕</button>
+                        </div>
+                        <select id="mod-sort-select" onchange="onSortMod(this.value)" class="select-sort">
+                            <option value="name_asc">Sắp xếp: Tên (A-Z)</option>
+                            <option value="name_desc">Sắp xếp: Tên (Z-A)</option>
+                            <option value="size_desc">Sắp xếp: Dung lượng</option>
+                        </select>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        <button onclick="window.api.addModDialog()" class="btn-primary text-xs flex items-center gap-1.5">
+                            <span>+ Thêm Mod</span>
+                        </button>
+                        <button onclick="loadMods()" class="btn-secondary text-xs">Làm mới</button>
+                        <button onclick="toggleAllMods(true)" class="btn-emerald text-xs">Bật Hết</button>
+                        <button onclick="toggleAllMods(false)" class="btn-rose text-xs">Tắt Hết</button>
+                    </div>
+                </div>
+
+                <!-- Body: Categories + Mod Grid -->
+                <div class="flex-1 flex gap-4 overflow-hidden">
+                    <!-- Left Character Categories Panel -->
+                    <div class="w-56 bg-slate-900/40 rounded-xl border border-slate-800/60 flex flex-col overflow-hidden">
+                        <div class="p-3 font-bold text-xs text-slate-400 border-b border-slate-800/60">Nhân Vật / Danh Mục</div>
+                        <div id="category-list" class="flex-1 overflow-y-auto p-2 space-y-1">
+                            <!-- Injected by JS -->
+                        </div>
+                        <div class="p-2 border-t border-slate-800/60 grid grid-cols-3 gap-1 text-[11px]">
+                            <button onclick="window.api.addModDialog()" class="py-1 rounded bg-blue-600/30 text-blue-300 hover:bg-blue-600/50">+ Thêm</button>
+                            <button onclick="loadMods()" class="py-1 rounded bg-slate-800 text-slate-300 hover:bg-slate-700">Làm mới</button>
+                            <button onclick="toggleAllMods(false)" class="py-1 rounded bg-rose-600/30 text-rose-300 hover:bg-rose-600/50">Tắt hết</button>
+                        </div>
+                    </div>
+
+                    <!-- Right Mod Cards Grid -->
+                    <div class="flex-1 flex flex-col overflow-hidden">
+                        <div class="flex items-center justify-between text-xs text-slate-400 mb-2">
+                            <span id="mods-summary-text">Hiển thị 0 mod</span>
+                            <span class="text-sky-400">Windows Directory Junction: Hoạt động</span>
+                        </div>
+                        <div id="mod-grid" class="flex-1 overflow-y-auto grid grid-cols-3 gap-4 pr-1">
+                            <!-- Injected by JS -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 3: GỘP MOD (MATCHES SCREENSHOT 5) -->
+            <section id="tab-groups" class="tab-content hidden flex-1 flex flex-col">
+                <div class="flex items-center justify-between gap-3 mb-4 bg-slate-900/60 p-3 rounded-xl border border-slate-800/60">
+                    <button onclick="createGroupDialog()" class="btn-primary text-xs">+ Tạo Thư Mục Mod</button>
+                    <span class="text-xs text-slate-400">Bật / Tắt một loạt phong cách chỉ với 1 nút bấm</span>
+                </div>
+
+                <div class="flex-1 flex gap-4 overflow-hidden">
+                    <div class="w-64 bg-slate-900/40 rounded-xl border border-slate-800/60 flex flex-col overflow-hidden">
+                        <div class="p-3 font-bold text-xs text-slate-400 border-b border-slate-800/60">Danh Sách Nhóm Mod</div>
+                        <div id="group-list" class="flex-1 overflow-y-auto p-2 space-y-1"></div>
+                    </div>
+
+                    <div id="group-detail-view" class="flex-1 bg-slate-900/40 rounded-xl border border-slate-800/60 p-4 flex flex-col overflow-hidden">
+                        <div class="text-slate-500 text-center py-20">Chọn một nhóm mod để xem chi tiết</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 4: MACRO (MATCHES SCREENSHOT 2) -->
+            <section id="tab-macro" class="tab-content hidden flex-1 flex flex-col">
+                <div id="macro-admin-warning" class="mb-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-between">
+                    <div class="text-xs text-amber-200">
+                        ⚠️ Launcher đang chạy với quyền THƯỜNG — có thể bị chặn phím do UIPI khi game ở foreground.
+                    </div>
+                    <button onclick="window.api.restartAdmin()" class="btn-amber text-xs font-bold">Khởi động lại với quyền Admin</button>
+                </div>
+
+                <div class="flex gap-2 mb-4">
+                    <button onclick="switchMacroSubtab('basic')" id="subtab-macro-basic" class="subtab-btn active">Macro Cơ Bản (An toàn 100%)</button>
+                    <button onclick="switchMacroSubtab('pro')" id="subtab-macro-pro" class="subtab-btn">Macro Pro (Combo Đội Hình)</button>
+                </div>
+
+                <div id="macro-subtab-container" class="flex-1 overflow-y-auto">
+                    <!-- Injected by JS -->
+                </div>
+            </section>
+
+            <!-- TAB 5: FIX MODS (MATCHES SCREENSHOT 3) -->
+            <section id="tab-fix" class="tab-content hidden flex-1 flex flex-col">
+                <div class="p-4 rounded-xl bg-slate-900/60 border border-slate-800/60 mb-4 flex flex-col gap-3">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="text-lg font-bold text-sky-400">FIX MODS — Quét & Tự Động Sửa Lỗi File INI / ORFix</h3>
+                            <p class="text-xs text-slate-400">Tự động kiểm tra ORFix.ini / ORFixAPI.ini mỗi ngày</p>
+                        </div>
+                        <button onclick="checkORFixUpdate()" class="btn-secondary text-xs">🔄 Kiểm tra ORFix ngay</button>
+                    </div>
+
+                    <div class="flex items-center gap-3 pt-3 border-t border-slate-800/60">
+                        <select id="fix-scope-select" class="select-sort text-xs">
+                            <option value="all">Tất cả mod (toàn bộ thư mục Mods)</option>
+                            <option value="active">Chỉ mod đang bật</option>
+                        </select>
+                        <button onclick="runFixMods(false)" class="btn-emerald text-xs font-bold">⚡ FIX ALL MODS</button>
+                        <button onclick="runFixMods(true)" class="btn-secondary text-xs">🔍 Chỉ quét (không sửa)</button>
+                        <button onclick="undoFixMods()" class="btn-amber text-xs">↩️ Hoàn tác (.bak)</button>
+                    </div>
+                </div>
+
+                <div class="flex-1 rounded-xl bg-slate-950/80 border border-slate-800/80 p-4 font-mono text-xs overflow-y-auto" id="fix-results-log">
+                    Nhấn [FIX ALL MODS] để bắt đầu quét toàn bộ file .ini và sửa lỗi tương thích.
+                </div>
+            </section>
+
+            <!-- TAB 6: LỊCH SỬ CẦU NGUYỆN (MATCHES SCREENSHOT 7 & 8) -->
+            <section id="tab-wishes" class="tab-content hidden flex-1 flex flex-col">
+                <div class="flex items-center justify-between gap-3 mb-4 bg-slate-900/60 p-3 rounded-xl border border-slate-800/60">
+                    <div class="flex gap-2">
+                        <button onclick="switchWishMode('history')" id="subtab-wish-hist" class="subtab-btn active">Báo Cáo Lịch Sử Roll</button>
+                        <button onclick="switchWishMode('global')" id="subtab-wish-glob" class="subtab-btn">Thống Kê Toàn Cầu (Paimon.moe)</button>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="loadWishData()" class="btn-secondary text-xs">🔄 Làm mới</button>
+                        <button onclick="importWishCache()" class="btn-primary text-xs">📋 Quét Cache Game</button>
+                    </div>
+                </div>
+
+                <div id="wish-container" class="flex-1 overflow-y-auto"></div>
+            </section>
+
+            <!-- TAB 7: PLUGIN (MATCHES SCREENSHOT 6) -->
+            <section id="tab-plugins" class="tab-content hidden flex-1 flex flex-col">
+                <div class="flex items-center justify-between mb-4 bg-slate-900/60 p-3 rounded-xl border border-slate-800/60">
+                    <div>
+                        <h3 class="text-sm font-bold text-white">Plugin Phụ Trợ</h3>
+                        <p class="text-xs text-slate-400" id="plugins-status-text">Đang tải...</p>
+                    </div>
+                    <button onclick="window.api.importPluginDialog()" class="btn-primary text-xs">+ Nhập Plugin (.zip)</button>
+                </div>
+                <div id="plugins-container" class="flex-1 overflow-y-auto space-y-3"></div>
+            </section>
+
+            <!-- TAB 8: THÙNG RÁC (MATCHES SCREENSHOT 4) -->
+            <section id="tab-trash" class="tab-content hidden flex-1 flex flex-col">
+                <div class="flex items-center justify-between mb-4 bg-slate-900/60 p-3 rounded-xl border border-slate-800/60">
+                    <div>
+                        <h3 class="text-sm font-bold text-white">Thùng Rác</h3>
+                        <p class="text-xs text-slate-400">Các mod và macro sau khi xóa sẽ nằm ở thùng rác, có thể phục hồi</p>
+                    </div>
+                    <button onclick="emptyTrashAction()" class="btn-rose text-xs font-bold">🧹 Dọn tất cả thùng rác</button>
+                </div>
+                <div id="trash-items-container" class="flex-1 overflow-y-auto space-y-2"></div>
+            </section>
+
+        </main>
+    </div>
+
+    <script src="/app.js"></script>
+</body>
+</html>
+

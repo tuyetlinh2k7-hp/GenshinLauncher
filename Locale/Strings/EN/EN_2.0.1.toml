@@ -1,0 +1,15 @@
+[top_bar_efmi_button_tooltip]
+src = "Arknights: Endfield Model Importer"
+loc = "Arknights: Endfield Model Importer"
+
+[locale_list_conjunction_or]
+src = "or"
+loc = "or"
+
+[locale_list_conjunction_and]
+src = "and"
+loc = "and"
+
+[locale_list_separator]
+src = ", "
+loc = ", "

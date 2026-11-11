@@ -1,0 +1,166 @@
+import re
+import logging
+import winreg
+import json
+
+from dataclasses import dataclass, field
+from typing import Any
+from pathlib import Path
+
+import core.path_manager as Paths
+import core.event_manager as Events
+import core.config_manager as Config
+
+from core.locale_manager import L
+from core.package_manager import PackageMetadata
+
+from core.config.enums import InjectMode
+from core.packages.model_importers.model_importer import ModelImporterPackage, ModelImporterConfig, Version
+from core.packages.migoto_package import MigotoManagerConfig
+from core.platforms.game import Game
+
+log = logging.getLogger(__name__)
+
+
+@dataclass
+class HIMIConfig(ModelImporterConfig):
+    game: Game = Game.HONKAI_IMPACT
+    game_exe_names: list[str] = field(default_factory=lambda: ['BH3.exe'])
+    game_folder_names: list[str] = field(default_factory=lambda: ['Honkai Impact 3rd game'])
+    game_folder_children: list[str] = field(default_factory=lambda: ['BH3_Data'])
+    game_process_exe: str = "BH3.exe"
+    importer_folder: str = 'HIMI/'
+    launch_options: str = ''
+    xxmi_dll_inject_mode: InjectMode = InjectMode.HOOK
+    d3dx_ini: dict[str, dict[str, dict[str, Any]]] = field(default_factory=lambda: {
+        'core': {
+            'Loader': {
+                'loader': 'XXMI Launcher.exe',
+            },
+        },
+        'enforce_rendering': {
+            'Rendering': {
+                'texture_hash': 0,
+                'track_texture_updates': 0,
+                'track_region_hashes': 0,
+                'allow_buffer_resize': 1,
+            },
+        },
+        'enable_hunting': {
+            'Hunting': {
+                'hunting': {'on': 2, 'off': 0},
+            },
+        },
+        'dump_shaders': {
+            'Hunting': {
+                'marking_actions': {'on': 'clipboard hlsl asm regex', 'off': 'clipboard'},
+            },
+        },
+    })
+    unlock_fps: bool = False
+    unlock_fps_value: int = 120
+    disable_dcr: bool = True
+    enable_hdr: bool = False
+
+
+@dataclass
+class HIMIPackageConfig:
+    Importer: HIMIConfig = field(
+        default_factory=lambda: HIMIConfig()
+    )
+    Migoto: MigotoManagerConfig = field(
+        default_factory=lambda: MigotoManagerConfig()
+    )
+
+
+class HIMIPackage(ModelImporterPackage):
+    def __init__(self):
+        super().__init__(PackageMetadata(
+            package_name='HIMI',
+            auto_load=False,
+            github_repo_owner='leotorrez',
+            github_repo_name='HIMI-Package',
+            asset_version_pattern=r'.*(\d\.\d\.\d).*',
+            asset_name_format='HIMI-PACKAGE-v%s.zip',
+            signature_pattern=r'^## Signature[\r\n]+- ((?:[A-Za-z0-9+\/]{4})*(?:[A-Za-z0-9+\/]{4}|[A-Za-z0-9+\/]{3}=|[A-Za-z0-9+\/]{2}={2}))\r?$',
+            signature_public_key='MHYwEAYHKoZIzj0CAQYFK4EEACIDYgAEeigvK7REsX3f/vb+RRuFkZt/6VRbykI2oQcEU3IiI3N9s6jWqKkxAE2cTC9wKXDlkeSzlHjPxgzrTrKdqwkFzROMjw5T2LixFB5BYaT633aU/cCiHDbArIJ46+GrqemG',
+            exit_after_update=False,
+            installation_path='HIMI/',
+            requirements=['XXMI'],
+        ))
+        self.autodetect_patterns = {
+            'common': re.compile(r'([a-zA-Z]:[^:\"\']*Honkai[^:\"\']*)'),
+            # "installPath":"D:\\Games\\Honkai Impact 3rd game"
+            # "persistentInstallPath":"D:\\Games\\Honkai Impact 3rd game"
+            'hoyoplay': re.compile(r'\"(?:installPath|persistentInstallPath)\":\"([a-zA-Z]:[^:^\"]*)\"'),
+            # WwiseUnity: Setting Plugin DLL path to: D:/Games/Honkai Impact 3rd game/BH3_Data\Plugins\
+            # TelemetryInterface path:D:\Games\Honkai Impact 3rd game\BH3_Data\SDKCaches, level:2, dest:0
+            'output_log': re.compile(r'([a-zA-Z]:[^:\"\']*)(?:Plugins|SDKCaches|StreamingAssets|Persistent)'),
+        }
+        self.autodetect_files = {
+            '{HOYOPLAY}': ['common', 'hoyoplay'],
+            '{APPDATA}/LocalLow/miHoYo/Honkai Impact 3rd/output_log.txt': ['common', 'output_log'],
+        }
+
+    def get_installed_version(self):
+        try:
+            return str(Version(Config.Importers.HIMI.Importer.importer_path / 'Core' / 'HIMI' / 'main.ini'))
+        except Exception as e:
+            return ''
+
+    def configure_game_settings(self, game_path: Path | None, game_exe_path: Path | None):
+        if Config.Importers.HIMI.Importer.unlock_fps:
+            try:
+                self.unlock_fps()
+            except Exception as e:
+                raise ValueError(L('error_himi_fps_unlock_failed', 'Failed to configure FPS: {error_text}').format(error_text=e))
+
+    def unlock_fps(self):
+        # Open HSR registry key
+        try:
+            settings_key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, 'Software\\miHoYo\\Honkai Impact 3rd', 0, winreg.KEY_ALL_ACCESS)
+        except FileNotFoundError:
+            raise ValueError(L('error_himi_registry_key_not_found', """
+                Honkai Impact 3rd registry key is not found!
+                
+                Please start the game without FPS tweak, change FPS to any value to create the record and try again.
+                
+                Note: Tweak is supported only for the Global client and will not work for CN.
+            """))
+        # Read binary Graphics Settings key
+        try:
+            (settings_bytes, regtype) = winreg.QueryValueEx(settings_key, 'GENERAL_DATA_V2_PersonalGraphicsSettingV2_h3480068519')
+        except FileNotFoundError as e:
+            raise ValueError(L('error_himi_graphics_settings_not_found', """
+                Graphics Settings record is not found in Honkai Impact 3rd registry!
+                
+                Please start the game without FPS tweak, change FPS to any value to create the record and try again.
+            """))
+        if regtype != winreg.REG_BINARY:
+            raise ValueError(L('error_himi_unknown_graphics_format', 
+                'Unknown Graphics Settings format: Data type {regtype} is not {expected_type} of REG_BINARY!'
+            ).format(regtype=regtype, expected_type=winreg.REG_BINARY))
+        # Read bytes till the first null byte as settings ascii string
+        null_byte_pos = settings_bytes.find(b'\x00')
+        if null_byte_pos != -1:
+            settings_bytes = settings_bytes[:null_byte_pos]
+        else:
+            log.debug(f'Binary record GENERAL_DATA_V2_PersonalGraphicsSettingV2_h3480068519 is not null-terminated!')
+        settings_str = settings_bytes.decode('ascii')
+        # Load settings string to dict
+        settings_dict = json.loads(settings_str)
+        # Ensure settings dict has known keys
+        if 'TargetFrameRateForInLevel' not in settings_dict:
+            raise ValueError(L('error_himi_fps_key_not_found', 'Unknown Graphics Settings format: "TargetFrameRateForInLevel" key not found!'))
+        # Exit early if FPS is already set to Config.Importers.HIMI.Importer.unlock_fps_value
+        if settings_dict['TargetFrameRateForInLevel'] == Config.Importers.HIMI.Importer.unlock_fps_value:
+            return
+        # Set new settings
+        settings_dict['TargetFrameRateForInLevel'] = Config.Importers.HIMI.Importer.unlock_fps_value
+        settings_dict['TargetFrameRateForOthers'] = Config.Importers.HIMI.Importer.unlock_fps_value
+        # Serialize settings dict back to string
+        settings_str = json.dumps(settings_dict, separators=(',', ':'))
+        # Encode settings string as ascii bytes and terminate it with null
+        settings_bytes = bytes(settings_str.encode('ascii')) + b'\x00'
+        # Write encoded settings back to registry
+        winreg.SetValueEx(settings_key, 'GENERAL_DATA_V2_PersonalGraphicsSettingV2_h3480068519', None, regtype, settings_bytes)

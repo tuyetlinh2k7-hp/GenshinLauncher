@@ -1,0 +1,73 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# PyInstaller & Build artifacts
+build/
+dist/
+dist_release/
+*.manifest
+*.spec.bak
+
+# User Mod data (large binary files)
+Data_Mods/*
+!Data_Mods/.gitkeep
+GIMI/Mods/*
+!GIMI/Mods/.gitkeep
+Trash/*
+!Trash/.gitkeep
+
+# User personal data and runtime logs
+*.log
+genshin_launcher.log
+XXMI Launcher Log.txt
+genshin_wish_history.json
+genshin_config.json
+genshin_macro_config.json
+mod_groups.json
+XXMI Launcher Config.json
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+env/
+venv/
+.venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+
+# IDE / Editor files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*.swo
+
+# OS generated files
+.DS_Store
+Thumbs.db
+Desktop.ini

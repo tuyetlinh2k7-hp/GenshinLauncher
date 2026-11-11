@@ -1,0 +1,20 @@
+{
+	"GamePath": "",
+	"AutoStart": true,
+	"AutoClose": true,
+	"PopupWindow": false,
+	"Fullscreen": false,
+	"UseCustomRes": false,
+	"IsExclusiveFullscreen": false,
+	"StartMinimized": true,
+	"UsePowerSave": false,
+	"SuspendLoad": false,
+	"UseMobileUI": false,
+	"FPSTarget": 120,
+	"CustomResX": 1920,
+	"CustomResY": 1080,
+	"MonitorNum": 1,
+	"Priority": 3,
+	"AdditionalCommandLine": "",
+	"DllList": []
+}

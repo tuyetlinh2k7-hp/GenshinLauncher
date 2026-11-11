@@ -1,0 +1,13 @@
+{
+    "version": "3.3.2",
+    "signatures": {
+        "unlockfps_nc.exe": "MGQCMBjBGBetydfvb8XA6WTsNhwqTaUBWpsg3UUZq8V2ALFo+6ZdJH6ymWLc4nrbVAKStgIwagStu4Tm95Bq2oS7mv9SuXU+LtqicJesyNFhkCDS2vUaedWP7FhUhizIlcOyRfgl",
+        "unlockfps_nc.dll": "MGYCMQCaeVWqXAP+MWog6qlirGVvpE3k5nAS6VhTXgse9nvGjKIq5ylfoaZo9c4nYAM/8ckCMQDlWUOWkgt4QyqINMXvK3k5KR0ppPm5suf0aFsHkIFmIGzyAbQr1TJD3iJE0cDXmPo=",
+        "Newtonsoft.Json.dll": "MGQCMEhRjbJ3Y6old7aoULgO6PMsO4XuAI1FXVIOqC44mOQHyvGUx/yOnNFDowEThz8dMgIweqFlVUznrNl/VisiO2xN/hAJH7CK1QLCa3S7Ns+2SDVwZpy5KVIwFvuusV/L93Bx",
+        "Microsoft.Extensions.DependencyInjection.dll": "MGYCMQDq+0sGRIX0w2Fs/Igjd8qIVKKGpaCnuumNNPSsZVN6Sx9iPrjGGcElsSlDV0MqzuUCMQCi2AsjU+78RFdxZxDsYnVaODz/tqQB04TXZ2tVeJDd+5N+b2JL2odCb4eqTaxjL1M=",
+        "Microsoft.Extensions.DependencyInjection.Abstractions.dll": "MGYCMQD902C8ED3OGX5n1LE8cc2bTJJ90n5v9yn7j4J+AT/+dBnk1EIQzf9uz1dQVMfbnlACMQCI06BVGAuxQyhRr65s4DFeHoMkBA8IIlSFB2UYZoEvUUNa30lHkFCGABi/qlnn7SY=",
+        "unlockfps_nc.deps.json": "MGYCMQChpfsUNmOfUYl09MPbWSMkklL7a9t84aDJWSw+3gr4DMgrussXJSno2RuywhrauJkCMQCrCnp5d6iGSY9OOoVV3iDir/WgHqDg15UeWxLF/RKF7R1qvrMc/9qFTrlvARsX4gc=",
+        "unlockfps_nc.runtimeconfig.json": "MGUCMQCT8J3cSY8b2Wu7WzATXhFthZcwQdK3SJ5jAmjPpCU1LIir83xHMLMRXYlIqTDeRfUCMGKQPgqmbQFW2VDD5kcPEfIpwfdjbTxm/NkQ8UjAqCz2CNo5T3hFdqwIWOPsYLb9cw==",
+        "fps_config_template.json": "MGUCMQCreWEfPvHaB5LHD00FKtdr4eHTkGKk7Xx9+PmNyHoY5CqTgK4IwraurwV3ANa0NFkCMFzsOIq+C20NWxAqurtgsPoBllwloxzkEJ4zvWKlyBaHKKDwnM7Vsu+5JHcFnhEZnw=="
+    }
+}

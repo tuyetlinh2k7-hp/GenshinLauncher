@@ -1,0 +1,50 @@
+from dataclasses import dataclass
+
+from gui.enums import Stage
+
+
+@dataclass
+class GUIEvents:
+
+    @dataclass
+    class LauncherFrame:
+
+        @dataclass
+        class StageUpdate:
+            stage: Stage
+
+        @dataclass
+        class ToggleToolbox:
+            show: bool = False
+            hide_on_leave: bool = False
+
+        @dataclass
+        class ToggleImporter:
+            importer_id: str
+            index: int
+            show: bool = False
+
+        @dataclass
+        class HoverImporter:
+            importer_id: str
+            hover: bool = False
+
+    @dataclass
+    class ToggleThemeDevMode:
+        enabled: bool = False
+
+    @dataclass
+    class ReloadGUI:
+        reload_theme: bool = False
+
+    @dataclass
+    class PauseAnimations:
+        pass
+
+    @dataclass
+    class ResumeAnimations:
+        pass
+
+    @dataclass
+    class ScaleWindow:
+        pass

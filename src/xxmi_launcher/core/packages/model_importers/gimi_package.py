@@ -1,0 +1,396 @@
+import re
+import time
+import logging
+import shutil
+import winreg
+import json
+
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Any
+from pathlib import Path
+
+import core.path_manager as Paths
+import core.event_manager as Events
+import core.config_manager as Config
+
+from core.locale_manager import L
+from core.config.enums import WindowMode, GameLaunch, InjectMode
+from core.package_manager import PackageMetadata
+from core.packages.model_importers.model_importer import ModelImporterPackage, ModelImporterConfig, Version, StartMethod
+from core.packages.migoto_package import MigotoManagerConfig
+from core.platforms.game import Game
+from core.utils.process_manager import ProcessManager, LaunchContext, ProcessPriorityClass
+
+log = logging.getLogger(__name__)
+
+
+@dataclass
+class GIMIConfig(ModelImporterConfig):
+    game: Game = Game.GENSHIN_IMPACT
+    game_exe_names: list[str] = field(default_factory=lambda: ['GenshinImpact.exe', 'YuanShen.exe'])
+    game_folder_names: list[str] = field(default_factory=lambda: ['Genshin Impact Game'])
+    game_folder_children: list[str] = field(default_factory=lambda: ['GenshinImpact_Data'])
+    game_process_exe: str = "GenshinImpact.exe"
+    importer_folder: str = 'GIMI/'
+    launch_options: str = ''
+    start_method: StartMethod = StartMethod.SHELL
+    xxmi_dll_inject_mode: InjectMode = InjectMode.HOOK
+    d3dx_ini: dict[str, dict[str, dict[str, Any]]] = field(default_factory=lambda: {
+        'core': {
+            'Loader': {
+                'loader': 'XXMI Launcher.exe',
+            },
+        },
+        'enforce_rendering': {
+            'Rendering': {
+                'texture_hash': 0,
+                'track_texture_updates': 0,
+                'track_region_hashes': 0,
+                'allow_buffer_resize': 1,
+            },
+        },
+        'enable_hunting': {
+            'Hunting': {
+                'hunting': {'on': 2, 'off': 0},
+            },
+        },
+        'dump_shaders': {
+            'Hunting': {
+                'marking_actions': {'on': 'clipboard hlsl asm regex', 'off': 'clipboard'},
+            },
+        },
+    })
+    unlock_fps: bool = False
+    unlock_fps_value: int = 120
+    disable_dcr: bool = True
+    enable_hdr: bool = False
+
+
+@dataclass
+class GIMIPackageConfig:
+    Importer: GIMIConfig = field(
+        default_factory=lambda: GIMIConfig()
+    )
+    Migoto: MigotoManagerConfig = field(
+        default_factory=lambda: MigotoManagerConfig()
+    )
+
+
+class GIMIPackage(ModelImporterPackage):
+    def __init__(self):
+        super().__init__(PackageMetadata(
+            package_name='GIMI',
+            auto_load=False,
+            github_repo_owner='SilentNightSound',
+            github_repo_name='GIMI-Package',
+            asset_version_pattern=r'.*(\d\.\d\.\d).*',
+            asset_name_format='GIMI-PACKAGE-v%s.zip',
+            signature_pattern=r'^## Signature[\r\n]+- ((?:[A-Za-z0-9+\/]{4})*(?:[A-Za-z0-9+\/]{4}|[A-Za-z0-9+\/]{3}=|[A-Za-z0-9+\/]{2}={2}))\r?$',
+            signature_public_key='MHYwEAYHKoZIzj0CAQYFK4EEACIDYgAET5SWORxEdlJ3RXWIFiuwMX6oyZedz+DgaxtsbpWyxNQJDgIDj4uKLLJlvhRNpnkFEuQntgJKzJs0SpASBEguPOTE7VSnmp+x5uyDmsQsWzsRSAZip++a02jqR/K2j18H',
+            exit_after_update=False,
+            installation_path='GIMI/',
+            requirements=['XXMI', 'GI-FPS-Unlocker'],
+        ))
+        self.autodetect_patterns = {
+            'common': re.compile(r'([a-zA-Z]:[^:\"\']*Genshin[^:\"\']*)'),
+            # "installPath":"D:\\Games\\Genshin Impact game"
+            # "persistentInstallPath":"D:\\Games\\Genshin Impact game"
+            'hoyoplay': re.compile(r'\"(?:installPath|persistentInstallPath)\":\"([a-zA-Z]:[^:^\"]*)\"'),
+            # dll path: C:/Games/Genshin Impact/DATA/Genshin Impact game/GenshinImpact_Data\Plugins\EOSSDK-Win64-Shipping.dll
+            # TelemetryInterface path:C:\Games\Genshin Impact\DATA\Genshin Impact game\GenshinImpact_Data\SDKCaches, level:2, dest:0
+            'output_log': re.compile(r'([a-zA-Z]:[^:\"\']*)(?:Plugins|SDKCaches|StreamingAssets|Persistent)'),
+        }
+        self.autodetect_files = {
+            '{HOYOPLAY}': ['common', 'hoyoplay'],
+            '{APPDATA}/LocalLow/miHoYo/Genshin Impact/output_log.txt': ['common', 'output_log'],
+            '{APPDATA}/LocalLow/miHoYo/Genshin Impact/output_log.txt.last': ['common', 'output_log'],
+        }
+
+    def get_installed_version(self):
+        try:
+            return str(Version(Config.Importers.GIMI.Importer.importer_path / 'Core' / 'GIMI' / 'main.ini'))
+        except Exception as e:
+            return ''
+
+    def override_launch_context(
+        self,
+        launch_context: LaunchContext,
+        game_path: Path | None,
+        game_exe_path: Path | None,
+    ) -> None:
+        if Config.Importers.WWMI.Importer.game_launch != GameLaunch.DIRECT:
+            return
+
+        if Config.Importers.GIMI.Importer.unlock_fps:
+            launch_context.target.exe_path = Paths.App.Resources / 'Packages' / 'GI-FPS-Unlocker' / 'unlockfps_nc.exe'
+            launch_context.work_dir = launch_context.target.exe_path.parent
+
+    def configure_game_settings(self, game_path: Path | None, game_exe_path: Path | None):
+        if Config.Importers.GIMI.Importer.enable_hdr:
+            try:
+                self.enable_hdr()
+            except Exception as e:
+                raise Exception(L('error_gimi_hdr_enable_failed', """
+                    Failed to enable HDR!
+
+                    {error_text}
+                """).format(error_text=e)) from e
+
+        if Config.Importers.WWMI.Importer.game_launch == GameLaunch.DIRECT:
+            if Config.Importers.GIMI.Importer.unlock_fps:
+                try:
+                    self.configure_fps_unlocker()
+                except Exception as e:
+                    raise Exception(L('error_gimi_fps_unlocker_config_failed', """
+                        Failed to configure FPS Unlocker!
+    
+                        {error_text}
+                    """).format(error_text=e)) from e
+
+        if not Config.Active.Importer.is_xxmi_dll_used():
+            return
+
+        if Config.Importers.GIMI.Importer.configure_game:
+            try:
+                # Set "Dynamic Character Resolution" to "Off"
+                self.update_dcr()
+            except Exception as e:
+                raise ValueError(L('error_gimi_dcr_config_failed', """
+                    {error_text}
+                    
+                    If nothing helps:
+                    1. Disable `Configure Game Settings` in launcher's `General Settings`
+                    2. Configure in-game `Graphics Settings` manually:
+                    * Graphics > `Dynamic Character Resolution` must be `Off`.
+                """).format(error_text=e)) from e
+
+    def update_dcr(self):
+        log.debug(f'Checking DCR...')
+
+        # Open GI registry settings key
+        settings_key = None
+        gi_reg_keys = [
+            (winreg.HKEY_CURRENT_USER, 'SOFTWARE\\miHoYo\\Genshin Impact'),
+            (winreg.HKEY_CURRENT_USER, 'SOFTWARE\\miHoYo\\原神'),
+        ]
+        for (key, subkey) in gi_reg_keys:
+            try:
+                settings_key = winreg.OpenKey(key, subkey, 0, winreg.KEY_ALL_ACCESS)
+                break
+            except FileNotFoundError:
+                continue
+        if settings_key is None:
+            raise ValueError(L('error_gimi_registry_key_not_found', """
+                Genshin Impact registry key is not found!
+                
+                Please start the game via original launcher to create the key and try again.
+            """))
+
+        # Read binary Graphics Settings key
+        try:
+            (settings_bytes, regtype) = winreg.QueryValueEx(settings_key, 'GENERAL_DATA_h2389025596')
+            if regtype != winreg.REG_BINARY:
+                raise ValueError(L('error_gimi_unknown_settings_format',
+                    'Unknown Settings format: Data type {regtype} is not {expected_type} of REG_BINARY!'
+                ).format(regtype=regtype, expected_type=winreg.REG_BINARY))
+        except FileNotFoundError:
+            raise ValueError(L('error_gimi_graphics_settings_not_found', """
+                Graphics Settings record is not found in GI registry!
+                
+                Please start the game via official launcher to create the record and try again.
+            """))
+
+        # Read bytes till the first null byte as settings ascii string
+        null_byte_pos = settings_bytes.find(b'\x00')
+        if null_byte_pos != -1:
+            settings_bytes = settings_bytes[:null_byte_pos]
+        else:
+            log.debug(f'Binary record GENERAL_DATA_h2389025596 is not null-terminated!')
+        settings_str = settings_bytes.decode('ascii')
+
+        # Load settings string to dict
+        settings_dict = json.loads(settings_str)
+
+        # Ensure settings dict has known keys
+        if 'graphicsData' not in settings_dict:
+            raise ValueError(L('error_gimi_graphics_data_key_not_found', 'Unknown Graphics Settings format: "graphicsData" key not found!'))
+        if 'globalPerfData' not in settings_dict:
+            raise ValueError(L('error_gimi_global_perf_data_key_not_found', 'Unknown Graphics Settings format: "globalPerfData" key not found!'))
+
+        # Set new settings
+        settings_updated = False
+
+        graphics_data = json.loads(settings_dict['graphicsData'])
+        custom_volatile_grades = graphics_data['customVolatileGrades']
+
+        found = False
+        for entry in custom_volatile_grades:
+            if entry['key'] == 21:
+                found = True
+                if entry['value'] == 2:
+                    entry['value'] = 1
+                    settings_updated = True
+        if not found:
+            custom_volatile_grades.append({'key': 21, 'value': 1})
+            settings_updated = True
+
+        global_perf_data = json.loads(settings_dict['globalPerfData'])
+        save_items = global_perf_data['saveItems']
+
+        found = False
+        for entry in save_items:
+            if entry['entryType'] == 21:
+                found = True
+                if entry['index'] == 1:
+                    entry['index'] = 0
+                    entry['itemVersion'] = 'OSRELWin5.0.0'
+                    settings_updated = True
+        if not found:
+            save_items.append({'entryType': 21, 'index': 0, 'itemVersion': 'OSRELWin5.0.0'})
+            settings_updated = True
+
+        # Exit early if no settings were changed
+        if not settings_updated:
+            return
+
+        log.debug(f'Disabling DCR...')
+
+        # Serialize settings dict back to string
+        settings_dict['graphicsData'] = json.dumps(graphics_data, separators=(',', ':'))
+        settings_dict['globalPerfData'] = json.dumps(global_perf_data, separators=(',', ':'))
+        settings_str = json.dumps(settings_dict, separators=(',', ':'))
+
+        # Encode settings string as ascii bytes and terminate it with null
+        settings_bytes = bytes(settings_str.encode('ascii')) + b'\x00'
+
+        # Write encoded settings back to registry
+        winreg.SetValueEx(settings_key, 'GENERAL_DATA_h2389025596', None, regtype, settings_bytes)
+
+    def enable_hdr(self):
+        log.debug(f'Enabling HDR...')
+
+        # Open GI registry settings key
+        settings_key = None
+        gi_reg_keys = [
+            (winreg.HKEY_CURRENT_USER, 'SOFTWARE\\miHoYo\\Genshin Impact'),
+            (winreg.HKEY_CURRENT_USER, 'SOFTWARE\\miHoYo\\原神'),
+        ]
+        for (key, subkey) in gi_reg_keys:
+            try:
+                settings_key = winreg.OpenKey(key, subkey, 0, winreg.KEY_ALL_ACCESS)
+                break
+            except FileNotFoundError:
+                continue
+        if settings_key is None:
+            raise ValueError(L('error_gimi_registry_key_not_found', """
+                Genshin Impact registry key is not found!
+                
+                Please start the game via original launcher to create the key and try again.
+            """))
+
+        # Write required key to registry, we need to do it each time, as it's getting removed after the game start
+        try:
+            winreg.SetValueEx(settings_key, 'WINDOWS_HDR_ON_h3132281285', None, winreg.REG_DWORD, 1)
+        except FileNotFoundError:
+            raise ValueError(L('error_gimi_hdr_record_not_found', """
+                HDR record is not found in GI registry!
+                
+                Please start the game via official launcher to create the record and try again.
+            """))
+
+    def configure_fps_unlocker(self):
+        Events.Fire(Events.Application.StatusUpdate(status=L('status_configuring_fps_unlocker', 'Configuring FPS Unlocker...')))
+
+        manager = ProcessManager(Path("unlockfps_nc.exe"))
+
+        if manager.stop(timeout=10):
+            # Wait a pi more for files to unlock.
+            time.sleep(3.141592653589793)
+        else:
+            Events.Fire(Events.Application.ShowError(
+                modal=True,
+                message=L('message_text_fps_unlocker_manual_termination', """
+                    Failed to terminate FPS Unlocker!
+                    
+                    Please close it manually and press [OK] to continue.
+                """)
+            ))
+
+        fps_config_template_path = Paths.App.Resources / 'Packages' / 'GI-FPS-Unlocker' / 'fps_config_template.json'
+        fps_config_path = fps_config_template_path.parent / 'fps_config.json'
+
+        try:
+            with open(fps_config_path, 'r', encoding='utf-8') as f:
+                fps_config = json.load(f)
+        except Exception:
+            shutil.copy2(fps_config_template_path, fps_config_path)
+            with open(fps_config_path, 'r', encoding='utf-8') as f:
+                fps_config = json.load(f)
+
+        game_path = self.validate_game_path(Config.Active.Importer.game_folder)
+        game_exe_path = self.validate_game_exe_path(game_path)
+
+        modified = False
+
+        if fps_config.get('GamePath', None) != str(game_exe_path):
+            fps_config['GamePath'] = str(game_exe_path)
+            modified = True
+
+        process_priorities = {
+            ProcessPriorityClass.IDLE_PRIORITY_CLASS: 5,
+            ProcessPriorityClass.BELOW_NORMAL_PRIORITY_CLASS: 4,
+            ProcessPriorityClass.NORMAL_PRIORITY_CLASS: 3,
+            ProcessPriorityClass.ABOVE_NORMAL_PRIORITY_CLASS: 2,
+            ProcessPriorityClass.HIGH_PRIORITY_CLASS: 1,
+            ProcessPriorityClass.REALTIME_PRIORITY_CLASS: 0,
+        }
+        process_priority_class = ProcessPriorityClass(Config.Active.Importer.process_priority)
+
+        process_priority_int = process_priorities[process_priority_class]
+
+        if fps_config.get('Priority', None) != process_priority_int:
+            fps_config['Priority'] = process_priority_int
+            modified = True
+
+        if fps_config.get('AdditionalCommandLine', None) != Config.Active.Importer.launch_options:
+            fps_config['AdditionalCommandLine'] = Config.Active.Importer.launch_options
+            modified = True
+
+        window_modes = {
+            WindowMode.WINDOWED: {
+                'PopupWindow': False,
+                'Fullscreen': False,
+                'IsExclusiveFullscreen': False,
+            },
+            WindowMode.BORDERLESS: {
+                'PopupWindow': True,
+                'Fullscreen': False,
+                'IsExclusiveFullscreen': False,
+            },
+            WindowMode.FULLSCREEN: {
+                'PopupWindow': False,
+                'Fullscreen': True,
+                'IsExclusiveFullscreen': False,
+            },
+            WindowMode.EXCLUSIVE_FULLSCREEN: {
+                'PopupWindow': False,
+                'Fullscreen': True,
+                'IsExclusiveFullscreen': True,
+            },
+        }
+
+        for setting, value in window_modes[Config.Active.Importer.window_mode].items():
+            if fps_config.get(setting, None) != value:
+                fps_config[setting] = value
+                modified = True
+
+        if fps_config.get('FPSTarget', None) != Config.Active.Importer.unlock_fps_value:
+            fps_config['FPSTarget'] = Config.Active.Importer.unlock_fps_value
+            modified = True
+
+        if not modified:
+            return
+
+        with open(fps_config_path, 'w', encoding='utf-8') as f:
+            f.write(json.dumps(fps_config, indent=4))

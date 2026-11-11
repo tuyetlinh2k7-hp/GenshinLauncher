@@ -1,0 +1,8 @@
+{
+    "version": "1.2.3",
+    "signatures": {
+        "3dmloader.dll": "MGQCMBUuVEEhCfRqr7z/3LoRZbMODzKVmZO0EAtjAtUjO6Pv9ntxB43uaxoz7XdLZBpdHQIwZwGmS8n1GdZkXiIeeZzbl8GrVWQUFgKdrleTAYTTaE6Ktalk70Hhs2ubP8RF2qMt",
+        "d3d11.dll": "MGUCMQDDRYWNRRbH88398c2mF+7Nyg0MC64OnVL7/vp+h/Bj6PAKZbUQsqRrPrbzWv01n1gCMD9Q5Gw5zywTJrMfkLDD811w+AzwNJQ8VCgJphRFE/NIUm9YRnMC7AZ/TuYAoXQ7mQ==",
+        "d3dcompiler_47.dll": "MGYCMQCZzqKEhXZ4h8yG4No3bhx5B46hmkW06voHcTLiTV/C2UIJsRBedhOqZHW/SWJu8hMCMQCSsubJSdhEfR7QdLH6sPLtBw55NKEh9d0a/bRPOVfgDvNl+kHz6XVrSTX356hCRec="
+    }
+}
